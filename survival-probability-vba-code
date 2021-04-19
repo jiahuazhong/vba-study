@@ -1,0 +1,90 @@
+Sub CalculateSurvivalProbability()
+
+    'Date source: https://mort.soa.org/ViewTable.aspx?&TableIdentity=2790
+    'To-do: for learning purpose, shall practise importing the CSV file to Excel.
+
+    'Calculate survival probability and then assign the values to an array
+    
+    'Calculation based on the formula from page 42, https://www.cfainstitute.org/research/foundation/2013/life-annuities-an-optimal-product-for-retirement-income
+
+    Dim mortalityRateArray(115) As Double
+    Dim survivalRateArray(115) As Double
+    Dim survivalProbabilityArray(115) As Double
+    
+    Dim rowNumber As Integer
+    rowNumber = 2
+    
+    For i = 18 To 115
+        mortalityRateArray(i) = Cells(rowNumber, 2).Value
+        rowNumber = rowNumber + 1
+    Next i
+    
+    For i = 18 To 115
+        survivalRateArray(i) = 1 - mortalityRateArray(i)
+    Next i
+       
+    Dim yourAge As Integer
+    Dim ageX As Integer
+    
+    If Not IsNumeric(Range("Your_Age").Value) Then
+        MsgBox "Your age must be a number"
+        Exit Sub
+    End If
+    
+    yourAge = Application.WorksheetFunction.RoundDown(Range("Your_Age").Value, 0)
+    
+    If yourAge > 99 Or yourAge < 18 Then
+        MsgBox "You age must be a number between 18 and 98"
+        Exit Sub
+    End If
+
+    Range("probability99").NumberFormat = "0.000%"
+    
+    survivalProbabilityArray(yourAge) = survivalRateArray(yourAge)
+    
+    For i = yourAge + 1 To 99
+            survivalProbabilityArray(i) = survivalRateArray(i) * survivalProbabilityArray(i - 1)
+    Next i
+
+    Range("probability99").Value = survivalProbabilityArray(i - 1)
+    
+    'Call a sub to generate a diagram dynamically
+     Call PlotChart(yourAge, 99, survivalProbabilityArray)
+    
+End Sub
+
+Sub PlotChart(currentAge As Integer, endAge As Integer, ary As Variant)
+
+    'Delete the previous chart
+    
+    If Worksheets("Sheet1").ChartObjects.Count > 0 Then
+    Worksheets("Sheet1").ChartObjects.Delete
+    End If
+    
+    'Generate a chart
+    
+    Dim spChart As ChartObject
+    
+    'default chart type
+    Set spChart = Sheets("Sheet1").ChartObjects.Add(Left:=140, Width:=900, Top:=110, Height:=500)
+    spChart.chart.SeriesCollection.NewSeries
+    spChart.chart.SeriesCollection(1).Values = ary
+    
+    With Worksheets("Sheet1").ChartObjects(1).chart
+     .HasTitle = True
+     .ChartTitle.Text = "Survival Probability from Age " & currentAge & " to End of Year"
+    End With
+
+    With Worksheets("Sheet1").ChartObjects(1).chart.Axes(xlCategory)
+     .HasTitle = True
+     .AxisTitle.Caption = "Age"
+    End With
+    
+    With Worksheets("Sheet1").ChartObjects(1).chart.Axes(xlValue)
+     .HasTitle = True
+     .AxisTitle.Caption = "Survival Probability"
+     'set max probability to 1 to avoid confusion
+     .MaximumScale = 1
+    End With
+
+End Sub
