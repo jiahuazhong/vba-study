@@ -1,0 +1,161 @@
+' VBA Learning objectives
+' 1. Read/Write file
+' 2. Webpage scraping
+' 3. Use regular expression in vlookup/xlookip
+' 4. Dynamically change data chart's x/y axis and unit
+' 5. Object-oriented programming concepts: Class/object/function/property
+' 6. VBA libraries
+' 7. Web services --- next time
+
+Public Sub getHPI()
+
+Dim url As String, year As Integer, month As Integer, rowNumber As Integer
+
+Dim http As Object, html As New HTMLDocument, hpiElement As HTMLHtmlElement
+Dim goldPriceArray As Variant
+
+year = 2005
+month = 1
+rowNumber = 2
+
+Sheets("Sheet3").Cells(1, 1).Value = "Date"
+Sheets("Sheet3").Cells(1, 2).Value = "House Price in CAD"
+Sheets("Sheet3").Cells(1, 3).Value = "Gold Price per oz"
+Sheets("Sheet3").Cells(1, 4).Value = "House Price in Gold (oz)"
+
+goldPriceArray = getGoldPrice()
+
+Set http = CreateObject("MSXML2.XMLHTTP")
+
+For year = 2005 To 2020
+    For month = 1 To 12
+        url = "https://www.rebgv.org/market-watch/MLS-HPI-home-price-comparison.hpi.vancouver_west.all.detached." & year & "-" & month & "-1.html"
+        http.Open "GET", url, False
+        http.send
+        html.body.innerHTML = http.responseText
+        Set hpiElement = html.getElementById("hpiTableArea")
+        Sheets("Sheet3").Cells(rowNumber, 1).Value = year & "-" & month
+        Sheets("Sheet3").Cells(rowNumber, 2).Value = hpiElement.getElementsByTagName("td")(0).innerText
+        'Gold price of this particular month
+        Sheets("Sheet3").Cells(rowNumber, 3).Value = CCur(goldPriceArray((year - 2005) * 12 + (month - 1)))
+        Sheets("Sheet3").Cells(rowNumber, 4).Value = CInt(hpiElement.getElementsByTagName("td")(0).innerText / goldPriceArray((year - 2005) * 12 + (month - 1)))
+        rowNumber = rowNumber + 1
+    Next month
+Next year
+
+
+End Sub
+
+Public Function getGoldPrice() As Variant
+
+'No file I/O exception handling.
+'Okay for learning purpose; In real world scenarios, I/O error handling must be addressed
+
+'Excel objects
+Dim goldPriceFile As Workbook, goldPriceSheet As Worksheet
+
+
+Set goldPriceFile = Workbooks.Open(Application.ActiveWorkbook.Path & "\Prices.xlsx")
+' Read the file, but don't open it
+Application.ScreenUpdating = True
+'ActiveWindow.Visible = False
+
+Set goldPriceSheet = goldPriceFile.Worksheets("Monthly_Average")
+
+'An array to store CAD gold price from 2005-01 to 2020-12, 16 years x 12 months, so 192 elements
+Dim goldPrice(192) As Variant
+
+'From 2005-01 to 2020-20, use xlookup to find gold price in CAD and store them in array
+Dim year As Integer, month As Integer, index As Integer
+index = 0
+
+Dim lookupRange As Range
+Dim returnRange As Range
+Dim MyDate As Date, dateNumber As Long
+
+Set lookupRange = goldPriceSheet.Range("D:D")    'source
+Set returnRange = goldPriceSheet.Range("I:I")    'return
+
+For year = 2005 To 2020
+    For month = 1 To 12
+        MyDate = DateValue(month & "/" & year)    ' Return a date
+        dateNumber = CLng(MyDate)
+        'Very tricky part here: Spent an hour in figuring out the right data type
+        goldPrice(index) = Application.WorksheetFunction.XLookup(dateNumber, lookupRange, returnRange, -1, 1)
+        index = index + 1
+    Next month
+Next year
+
+'close file
+goldPriceFile.Close
+
+getGoldPrice = goldPrice
+
+
+End Function
+
+Function PlotChart(rng)
+
+    'Dim measureRange As Range
+    'Set measureRange = ActiveWorkbook.Worksheets("Sheet1").Range("D2:D193")
+
+    'Delete the previous chart
+    
+    If Worksheets("Sheet3").ChartObjects.Count > 0 Then
+    Worksheets("Sheet3").ChartObjects.Delete
+    End If
+    
+    'Generate a chart
+    
+    Dim spChart As ChartObject
+    
+    'default chart type
+    Set spChart = Sheets("Sheet3").ChartObjects.Add(Left:=340, Width:=900, Top:=110, Height:=500)
+    spChart.Chart.SeriesCollection.NewSeries
+    
+    'If (ActiveSheet.Buttons(Application.Caller).Caption = "Measure in CAD") Then
+    'Set measureRange = ActiveWorkbook.Worksheets("Sheet1").Range("B2:B193")
+    'End If
+    
+    
+    'If (ActiveSheet.Buttons(Application.Caller).Caption = "Measure in Gold") Then
+    'Set measureRange = ActiveWorkbook.Worksheets("Sheet1").Range("D2:D193")
+    'End If
+    
+    spChart.Chart.SeriesCollection(1).Values = rng
+    
+    With Worksheets("Sheet3").ChartObjects(1).Chart
+     .HasTitle = True
+     .ChartTitle.Text = "Meausre House Price in CAD or Gold"
+    End With
+
+    With Worksheets("Sheet3").ChartObjects(1).Chart.Axes(xlCategory)
+     .HasTitle = True
+     .AxisTitle.Caption = "Date"
+    End With
+    
+    With Worksheets("Sheet3").ChartObjects(1).Chart.Axes(xlValue)
+     .HasTitle = True
+     .AxisTitle.Caption = "Price"
+
+    End With
+
+End Function
+
+Sub Button4_Click()
+ 
+ Dim rng As Range
+ Set rng = ActiveWorkbook.Worksheets("Sheet3").Range("D2:D193")
+ Call PlotChart(rng)
+ 
+End Sub
+
+
+Sub Button5_Click()
+ 
+ Dim rng As Range
+ Set rng = ActiveWorkbook.Worksheets("Sheet3").Range("B2:B193")
+ Call PlotChart(rng)
+ 
+End Sub
+
